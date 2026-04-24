@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # waste_incineration
 End-to-end MTSC pipeline for incinerator operation-state classification.
 =======
@@ -69,4 +68,4 @@ Apply optional rule postprocess (`configs/post_rules.json`):
 ```bash
 python scripts/eval_with_rules.py --config configs/train.json --checkpoint artifacts/train_lstm/best.pt --split test --with-rules --rules-config configs/post_rules.json --out-dir artifacts/eval_lstm_rule
 ```
->>>>>>> 8228c9f (chore: initial code-only upload)
+
