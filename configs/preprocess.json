@@ -28,7 +28,7 @@
   "split_ratios": [0.7, 0.1, 0.2],
   "mode": "split",
   "transition_buffer_minutes": 10,
-  "transition_strategy": "doown_weight",
+  "transition_strategy": "down_weight",
   "transition_weight": 0.2,
   "drop_labels": ["故障"],
   "exclude_features": [],
