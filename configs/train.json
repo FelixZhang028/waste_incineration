@@ -1,0 +1,57 @@
+{
+  "data": {
+    "processed_dir": "data/processed",
+    "train_table": "dataset_train.csv",
+    "val_table": "dataset_val.csv",
+    "test_table": "dataset_test.csv",
+    "train_window_index": "window_index_train.csv",
+    "val_window_index": "window_index_val.csv",
+    "test_window_index": "window_index_test.csv",
+    "feature_list": "feature_list.json",
+    "label_map": "label_map.json",
+    "batch_size": 256,
+    "eval_batch_size": 128, 
+    "num_workers": 0,
+    "pin_memory": true,
+    "max_train_windows": null,
+    "max_eval_windows": null
+  },
+  "model": {
+    "name": "lstm",
+    "params": {
+      "hidden_size": 128,
+      "num_layers": 2,
+      "dropout": 0.2,
+      "bidirectional": false
+    }
+  },
+  "loss": {
+    "name": "cross_entropy",
+    "gamma": 2.0,
+    "class_weight": "none"
+  },
+  "optimizer": {
+    "name": "adam",
+    "lr": 0.002,
+    "weight_decay": 0.0,
+    "momentum": 0.9
+  },
+  "scheduler": {
+    "name": "step",
+    "step_size": 5,
+    "gamma": 0.5,
+    "t_max": 20,
+    "min_lr": 1e-06
+  },
+  "trainer": {
+    "epochs": 20,
+    "device": "auto",
+    "seed": 42,
+    "grad_clip_norm": 1.0,
+    "early_stopping_patience": 5,
+    "monitor": "val_macro_f1",
+    "log_every_steps": 100,
+    "output_dir": "artifacts/train_424",
+    "use_amp": false
+  }
+}

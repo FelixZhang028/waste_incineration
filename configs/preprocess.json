@@ -1,0 +1,48 @@
+{
+  "point_table_path": "data/raw/滨江绿能炉点表.xls",
+  "output_dir": "data/processed",
+  "data_sources": [
+    {
+      "name": "2024-05",
+      "data_path": "data/raw/bj240501-240531.csv",
+      "label_path": "data/raw/工况状态人工标记结果（滨江绿能2024年5月）.xlsx",
+      "encoding": "gbk"
+    },
+    {
+      "name": "2024-12",
+      "data_path": "data/raw/bj241220-250104.csv",
+      "label_path": "data/raw/工况状态人工标记结果（滨江绿能2024年12月）.xlsx",
+      "encoding": "gbk"
+    },
+    {
+      "name": "2026-01",
+      "data_path": "data/raw/bj260101-260201.csv",
+      "label_path": "data/raw/工况状态人工标记结果（滨江绿能2026年1月）.xlsx",
+      "encoding": "gbk"
+    }
+  ],
+  "split_strategy": "source_holdout",
+  "train_sources": ["2024-05"],
+  "val_sources": ["2024-12"],
+  "test_sources": ["2026-01"],
+  "split_ratios": [0.7, 0.1, 0.2],
+  "mode": "split",
+  "transition_buffer_minutes": 10,
+  "transition_strategy": "doown_weight",
+  "transition_weight": 0.2,
+  "drop_labels": ["故障"],
+  "exclude_features": [],
+  "outlier_quantiles": [0.001, 0.999],
+  "impute_method": "ffill_bfill_median",
+  "diff_lags": [], 
+  "rolling_windows_minutes": [],
+  "build_window_samples": true,
+  "window_minutes": 30,
+  "window_export_mode": "index",
+  "normal_label": "正常运行",
+  "monitor_to_furnace": {
+    "FQA70081": 1,
+    "FQA70082": 2,
+    "FQA70083": 3
+  }
+}

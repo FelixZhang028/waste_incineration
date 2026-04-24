@@ -1,0 +1,46 @@
+# Python cache and tooling
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build and packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local secrets and env files
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Data and ML artifacts
+data/raw/
+data/processed/
+artifacts/
+logs/
+checkpoints/
+
+# Model and binary artifacts
+*.pt
+*.pth
+*.ckpt
+*.onnx

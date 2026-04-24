@@ -1,0 +1,60 @@
+﻿{
+  "enabled": true,
+  "inverse_scale": true,
+  "feature_mapping": {
+    "temperature_upper_col": "炉膛上部温度",
+    "temperature_middle_col": "炉膛中部温度",
+    "oxygen_col": "炉氧量",
+    "pusher1_col": "炉推料器一",
+    "pusher2_col": "炉推料器二",
+    "run_zero_cols": ["辅燃运行信号", "炉引风机频率", "炉鼓风机频率"],
+    "shutdown_zero_cols": ["炉活性炭喷射量", "炉小苏打喷射量", "氨水流量"]
+  },
+  "thresholds": {
+    "temp_low": 400.0,
+    "temp_high": 850.0,
+    "o2_high": 19.0,
+    "cooldown_slope_lt": 0.0,
+    "bake_slope_gt": 0.0,
+    "stop_normal_like_factor": 2.0,
+    "stop_normal_like_margin": 0.2,
+    "stop_normal_like_fallback_abs": 1.0
+  },
+  "timing": {
+    "slope_window_minutes": 10
+  },
+  "states": {
+    "stop": 0,
+    "cooldown": 1,
+    "shutdown": 2,
+    "bake": 3,
+    "startup": 4,
+    "normal": 5
+  },
+  "runtime": {
+    "confidence_max_for_override": 0.8,
+    "hard_override_state_ids": [2],
+    "startup_max_minutes": 240,
+    "min_duration_minutes": {
+      "stop": 6,
+      "cooldown": 6,
+      "shutdown": 6,
+      "bake": 6,
+      "startup": 6,
+      "normal": 6
+    },
+    "transition_whitelist": [
+      [0, 1],
+      [0, 2],
+      [1, 2],
+      [1, 3],
+      [2, 3],
+      [2, 5],
+      [3, 4],
+      [3, 5],
+      [4, 5],
+      [5, 0],
+      [5, 2]
+    ]
+  }
+}

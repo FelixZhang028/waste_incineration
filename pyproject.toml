@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mtsc-preprocess"
+version = "0.1.0"
+description = "Preprocessing pipeline for MSW incinerator operation-state modeling."
+requires-python = ">=3.10"
+dependencies = [
+  "pandas>=2.0",
+  "numpy>=1.24",
+  "openpyxl>=3.1",
+  "xlrd>=2.0",
+  "torch>=2.2",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
