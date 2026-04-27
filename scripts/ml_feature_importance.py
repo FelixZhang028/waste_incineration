@@ -229,7 +229,7 @@ def _compute_metrics(pred: np.ndarray, target: np.ndarray, class_names: list[str
 def _raw_importance(model, model_name: str, feature_count: int) -> tuple[np.ndarray, np.ndarray | None]:
     if model_name == "lightgbm":
         booster = model.booster_
-        gain = booster.feature_importance(importance_type="gain").astype(np.float64) # 这个特征被模型用了多少次，次数越多，说明这个特征越重要（缺点是：用得多不代表每次都很关键）
+        gain = booster.feature_importance(importance_type="gain").astype(np.float64) # 这个特征被模型用了多少次，次数越多，说明这个特征越重要（缺点：用得多不代表每次都很关键）
         split = booster.feature_importance(importance_type="split").astype(np.float64) # 这个特征对模型效果提升有多大
 
         return gain, split
