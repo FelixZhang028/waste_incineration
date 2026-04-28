@@ -249,8 +249,10 @@ def _evaluate_split(
     y: np.ndarray,
     class_names: list[str],
 ) -> tuple[dict, np.ndarray]:
-    pred = np.asarray(model.predict(x), dtype=np.int64)
-    return _compute_metrics(pred=pred, target=y, class_names=class_names), pred
+    x_arr = np.asarray(x, dtype=np.float32)
+    y_arr = np.asarray(y, dtype=np.int64)
+    pred = np.asarray(model.predict(x_arr), dtype=np.int64)
+    return _compute_metrics(pred=pred, target=y_arr, class_names=class_names), pred
 
 
 def _raw_importance(model, model_name: str, feature_count: int) -> tuple[np.ndarray, np.ndarray | None]:
@@ -339,15 +341,20 @@ def _fit_model(
     y_val: np.ndarray | None,
     use_sample_weight: bool,
 ) -> None:
+    x_train_arr = np.asarray(x_train, dtype=np.float32)
+    y_train_arr = np.asarray(y_train, dtype=np.int64)
+    x_val_arr = None if x_val is None else np.asarray(x_val, dtype=np.float32)
+    y_val_arr = None if y_val is None else np.asarray(y_val, dtype=np.int64)
+
     fit_kwargs: dict[str, Any] = {}
     if use_sample_weight:
-        fit_kwargs["sample_weight"] = w_train
+        fit_kwargs["sample_weight"] = np.asarray(w_train, dtype=np.float32)
 
-    if model_name == "lightgbm" and x_val is not None and y_val is not None:
-        fit_kwargs["eval_set"] = [(x_val, y_val)]
+    if model_name == "lightgbm" and x_val_arr is not None and y_val_arr is not None:
+        fit_kwargs["eval_set"] = [(x_val_arr, y_val_arr)]
         fit_kwargs["eval_metric"] = "multi_logloss"
 
-    model.fit(x_train, y_train, **fit_kwargs)
+    model.fit(x_train_arr, y_train_arr, **fit_kwargs)
 
 
 def main() -> None:
