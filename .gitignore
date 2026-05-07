@@ -44,3 +44,8 @@ checkpoints/
 *.pth
 *.ckpt
 *.onnx
+
+# Local development configuration
+CLAUDE.md
+.claude-summary.md
+.tasks/
