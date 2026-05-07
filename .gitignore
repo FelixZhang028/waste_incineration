@@ -49,3 +49,5 @@ checkpoints/
 CLAUDE.md
 .claude-summary.md
 .tasks/
+
+catboost_info/

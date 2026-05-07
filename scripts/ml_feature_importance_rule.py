@@ -49,7 +49,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--model",
         default="lightgbm",
-        choices=["lightgbm", "extratrees"],
+        choices=["lightgbm", "extratrees", "catboost"],
         help="Machine-learning model used for feature importance",
     )
     p.add_argument("--out-dir", default="artifacts/ml_feature_importance", help="Output directory")
@@ -404,6 +404,25 @@ def _create_model(name: str, n_estimators: int, seed: int, class_weight: str):
             verbosity=-1,
         )
 
+    if name == "catboost":
+        try:
+            from catboost import CatBoostClassifier
+        except ImportError as exc:
+            raise RuntimeError(
+                "CatBoost is not installed. Install it with: python -m pip install catboost"
+            ) from exc
+        return CatBoostClassifier(
+            loss_function="MultiClass",
+            iterations=n_estimators,
+            learning_rate=0.05,
+            depth=6,
+            l2_leaf_reg=3.0,
+            auto_class_weights="Balanced" if class_weight == "balanced" else None,
+            random_seed=seed,
+            thread_count=-1,
+            verbose=False,
+        )
+
     try:
         from sklearn.ensemble import ExtraTreesClassifier
     except ImportError as exc:
@@ -434,6 +453,11 @@ def _raw_importance(model, model_name: str, feature_count: int) -> tuple[np.ndar
         split = booster.feature_importance(importance_type="split").astype(np.float64) # 这个特征对模型效果提升有多大
 
         return gain, split
+    if model_name == "catboost":
+        raw = np.asarray(model.get_feature_importance(), dtype=np.float64)
+        if raw.shape[0] != feature_count:
+            raise ValueError(f"Importance size mismatch: got {raw.shape[0]}, expected {feature_count}")
+        return raw, None
     importance = getattr(model, "feature_importances_", None)
     if importance is None:
         raise ValueError(f"Model {model_name} does not expose feature_importances_.")
@@ -562,8 +586,8 @@ def main() -> None:
         fit_kwargs["sample_weight"] = w_train
     model.fit(x_train, y_train, **fit_kwargs)
 
-    pred = model.predict(x_eval)
-    metrics = _compute_metrics(pred=np.asarray(pred), target=y_eval, class_names=class_names)
+    pred = np.asarray(model.predict(x_eval)).reshape(-1)
+    metrics = _compute_metrics(pred=pred, target=y_eval, class_names=class_names)
 
     raw_importance, split_importance = _raw_importance(
         model=model,

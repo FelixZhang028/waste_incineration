@@ -25,14 +25,16 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--model",
         default="lightgbm",
-        choices=["lightgbm", "extratrees"],
+        choices=["lightgbm", "extratrees", "catboost"],
         help="Machine-learning model to train",
     )
     p.add_argument("--out-dir", default="artifacts/train_ml", help="Output directory")
     p.add_argument("--seed", type=int, default=42, help="Random seed")
     p.add_argument("--n-estimators", type=int, default=500, help="Number of trees")
-    p.add_argument("--learning-rate", type=float, default=0.05, help="LightGBM learning rate")
+    p.add_argument("--learning-rate", type=float, default=0.05, help="LightGBM/CatBoost learning rate")
     p.add_argument("--num-leaves", type=int, default=31, help="LightGBM num_leaves")
+    p.add_argument("--depth", type=int, default=6, help="CatBoost tree depth")
+    p.add_argument("--l2-leaf-reg", type=float, default=3.0, help="CatBoost L2 leaf regularization")
     p.add_argument(
         "--class-weight",
         default="none",
@@ -156,12 +158,15 @@ def _load_window_matrix(
     index_path: str | Path,
     feature_cols: list[str],
     max_windows: int | None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    include_furnace_ids: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     index_df = _read_window_index(index_path, max_windows=max_windows)
     if index_df.empty:
         raise ValueError(f"No windows available in {index_path}")
 
     required = ["start_row_id", "end_row_id", "label_id", "sample_weight"]
+    if include_furnace_ids:
+        required.append("furnace_id")
     missing = [c for c in required if c not in index_df.columns]
     if missing:
         raise ValueError(f"Missing required columns in window index {index_path}: {missing}")
@@ -187,6 +192,9 @@ def _load_window_matrix(
     for i, (start, end) in enumerate(zip(starts, ends, strict=True)):
         x[i] = _window_to_stats(raw_features[int(start) : int(end) + 1])
 
+    if include_furnace_ids:
+        furnace_ids = index_df["furnace_id"].to_numpy(dtype=np.int64, copy=True)
+        return x, labels, sample_weight, furnace_ids
     return x, labels, sample_weight
 
 
@@ -197,6 +205,8 @@ def _create_model(
     class_weight: str,
     learning_rate: float,
     num_leaves: int,
+    depth: int,
+    l2_leaf_reg: float,
 ):
     class_weight_arg = None if class_weight == "none" else "balanced"
     if name == "lightgbm":
@@ -218,6 +228,26 @@ def _create_model(
             random_state=seed,
             n_jobs=-1,
             verbosity=-1,
+        )
+
+    if name == "catboost":
+        try:
+            from catboost import CatBoostClassifier
+        except ImportError as exc:
+            raise RuntimeError(
+                "CatBoost is not installed. Install it with: python -m pip install catboost"
+            ) from exc
+        return CatBoostClassifier(
+            loss_function="MultiClass",
+            iterations=n_estimators,
+            learning_rate=learning_rate,
+            depth=depth,
+            l2_leaf_reg=l2_leaf_reg,
+            auto_class_weights="Balanced" if class_weight == "balanced" else None,
+            random_seed=seed,
+            thread_count=-1,
+            verbose=False,
+            allow_writing_files=False,
         )
 
     try:
@@ -243,16 +273,42 @@ def _compute_metrics(pred: np.ndarray, target: np.ndarray, class_names: list[str
     return summarize_confusion(conf, class_names)
 
 
+def _compute_metrics_by_furnace(
+    pred: np.ndarray,
+    target: np.ndarray,
+    furnace_ids: np.ndarray,
+    class_names: list[str],
+) -> dict:
+    out: dict[str, dict] = {}
+    for furnace_id in sorted(np.unique(furnace_ids)):
+        mask = furnace_ids == furnace_id
+        out[str(int(furnace_id))] = _compute_metrics(
+            pred=pred[mask],
+            target=target[mask],
+            class_names=class_names,
+        )
+    return out
+
+
 def _evaluate_split(
     model,
     x: np.ndarray,
     y: np.ndarray,
+    furnace_ids: np.ndarray,
     class_names: list[str],
 ) -> tuple[dict, np.ndarray]:
     x_arr = np.asarray(x, dtype=np.float32)
     y_arr = np.asarray(y, dtype=np.int64)
-    pred = np.asarray(model.predict(x_arr), dtype=np.int64)
-    return _compute_metrics(pred=pred, target=y_arr, class_names=class_names), pred
+    furnace_arr = np.asarray(furnace_ids, dtype=np.int64)
+    pred = np.asarray(model.predict(x_arr), dtype=np.int64).reshape(-1)
+    metrics = _compute_metrics(pred=pred, target=y_arr, class_names=class_names)
+    metrics["by_furnace"] = _compute_metrics_by_furnace(
+        pred=pred,
+        target=y_arr,
+        furnace_ids=furnace_arr,
+        class_names=class_names,
+    )
+    return metrics, pred
 
 
 def _raw_importance(model, model_name: str, feature_count: int) -> tuple[np.ndarray, np.ndarray | None]:
@@ -261,6 +317,12 @@ def _raw_importance(model, model_name: str, feature_count: int) -> tuple[np.ndar
         gain = booster.feature_importance(importance_type="gain").astype(np.float64)
         split = booster.feature_importance(importance_type="split").astype(np.float64)
         return gain, split
+
+    if model_name == "catboost":
+        raw = np.asarray(model.get_feature_importance(), dtype=np.float64)
+        if raw.shape[0] != feature_count:
+            raise ValueError(f"Importance size mismatch: got {raw.shape[0]}, expected {feature_count}")
+        return raw, None
 
     importance = getattr(model, "feature_importances_", None)
     if importance is None:
@@ -328,6 +390,10 @@ def _save_model(model, model_name: str, out_dir: Path) -> dict[str, str]:
         txt_path = out_dir / "model.txt"
         model.booster_.save_model(str(txt_path))
         outputs["model_text"] = str(txt_path.resolve())
+    elif model_name == "catboost":
+        cbm_path = out_dir / "model.cbm"
+        model.save_model(str(cbm_path))
+        outputs["model_catboost"] = str(cbm_path.resolve())
     return outputs
 
 
@@ -377,25 +443,28 @@ def main() -> None:
         test_max = args.max_eval_windows
 
     print("Loading train windows...")
-    x_train, y_train, w_train = _load_window_matrix(
+    x_train, y_train, w_train, furnace_train = _load_window_matrix(
         table_path=train_table,
         index_path=train_index,
         feature_cols=feature_cols,
         max_windows=train_max,
+        include_furnace_ids=True,
     )
     print("Loading val windows...")
-    x_val, y_val, _w_val = _load_window_matrix(
+    x_val, y_val, _w_val, furnace_val = _load_window_matrix(
         table_path=val_table,
         index_path=val_index,
         feature_cols=feature_cols,
         max_windows=val_max,
+        include_furnace_ids=True,
     )
     print("Loading test windows...")
-    x_test, y_test, _w_test = _load_window_matrix(
+    x_test, y_test, _w_test, furnace_test = _load_window_matrix(
         table_path=test_table,
         index_path=test_index,
         feature_cols=feature_cols,
         max_windows=test_max,
+        include_furnace_ids=True,
     )
 
     model = _create_model(
@@ -405,6 +474,8 @@ def main() -> None:
         class_weight=args.class_weight,
         learning_rate=args.learning_rate,
         num_leaves=args.num_leaves,
+        depth=args.depth,
+        l2_leaf_reg=args.l2_leaf_reg,
     )
     use_sample_weight = not args.no_sample_weight
     _fit_model(
@@ -418,9 +489,9 @@ def main() -> None:
         use_sample_weight=use_sample_weight,
     )
 
-    train_metrics, _ = _evaluate_split(model, x_train, y_train, class_names)
-    val_metrics, _ = _evaluate_split(model, x_val, y_val, class_names)
-    test_metrics, _ = _evaluate_split(model, x_test, y_test, class_names)
+    train_metrics, _ = _evaluate_split(model, x_train, y_train, furnace_train, class_names)
+    val_metrics, _ = _evaluate_split(model, x_val, y_val, furnace_val, class_names)
+    test_metrics, _ = _evaluate_split(model, x_test, y_test, furnace_test, class_names)
 
     raw_importance, split_importance = _raw_importance(
         model=model,
@@ -463,8 +534,10 @@ def main() -> None:
         "class_weight": args.class_weight,
         "use_sample_weight": use_sample_weight,
         "n_estimators": args.n_estimators,
-        "learning_rate": args.learning_rate if args.model == "lightgbm" else None,
+        "learning_rate": args.learning_rate if args.model in {"lightgbm", "catboost"} else None,
         "num_leaves": args.num_leaves if args.model == "lightgbm" else None,
+        "depth": args.depth if args.model == "catboost" else None,
+        "l2_leaf_reg": args.l2_leaf_reg if args.model == "catboost" else None,
         "num_train_samples": int(len(y_train)),
         "num_val_samples": int(len(y_val)),
         "num_test_samples": int(len(y_test)),
